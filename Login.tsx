@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { API_URL } from './src/config/config';
+import { RootStackParamList } from './src/navigation/types';
 
+// 🔹 Screen props type
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-//import { router } from 'expo-router';
-
-export default function App() {
+export default function Login({ navigation }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
 
   const login = async () => {
     try {
-const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -25,26 +27,21 @@ const response = await fetch(`${API_URL}/auth/login`, {
       const data = await response.json();
 
       if (response.ok) {
-
-        console.log("listo ok")
-
         await AsyncStorage.setItem('accessToken', data.accessToken);
         setMessage('Login successful!');
-    //  router.push('/trabajoDiario');
-
+        navigation.navigate('HomeScreen');
       } else {
         setMessage(data.message || 'Login failed.');
       }
     } catch (error) {
-      
-      console.error('Error during login:', error); //esto se quita en produccion
+      console.error('Error during login:', error);
       setMessage('Error connecting to server.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login-3</Text>
+      <Text style={styles.title}>Login-4.3</Text>
 
       <Text>Usuario:</Text>
       <TextInput
@@ -64,7 +61,6 @@ const response = await fetch(`${API_URL}/auth/login`, {
       />
 
       <Button title="Ingresar" onPress={login} />
-
       <Text style={styles.message}>{message}</Text>
     </View>
   );
