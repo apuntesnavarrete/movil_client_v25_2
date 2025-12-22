@@ -29,7 +29,7 @@ export default function Login({ navigation }: Props) {
       if (response.ok) {
         await AsyncStorage.setItem('accessToken', data.accessToken);
         setMessage('Login successful!');
-        navigation.navigate('HomeScreen');
+        navigation.navigate('TrabajoDiario');
       } else {
         setMessage(data.message || 'Login failed.');
       }
@@ -41,7 +41,7 @@ export default function Login({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login-4.3</Text>
+      <Text style={styles.title}>Login-4.5</Text>
 
       <Text>Usuario:</Text>
       <TextInput

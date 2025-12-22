@@ -6,6 +6,9 @@ import 'react-native-screens';
 
 import { enableScreens } from 'react-native-screens';
 import { RootStackParamList } from './src/navigation/types';
+import TrabajoDiario from './TrabajoDiario';
+import Goles from './Goles';
+import Planteles from './Planteles';
 enableScreens();
 
 
@@ -22,6 +25,10 @@ export default function App() {
     >
       <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
+      <Stack.Screen name="TrabajoDiario" component={TrabajoDiario} />
+      <Stack.Screen name="Goles" component={Goles} />
+      <Stack.Screen name="Planteles" component={Planteles} />
+
     </Stack.Navigator>
   </NavigationContainer>
 );
