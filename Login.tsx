@@ -25,6 +25,61 @@ const [isOnline, setIsOnline] = useState(true);
   return () => unsubscribe();
 }, []);
 
+const TORNEOS_BY_ROLE: Record<string, number[]> = {
+  pro: [47, 39],
+  ed: [19, 21],
+};
+
+const preloadPlanteles = async (role: string) => {
+  try {
+    const torneoIds = TORNEOS_BY_ROLE[role] || [];
+
+    console.log('Preloading planteles for role:', role);
+    console.log('Torneo IDs:', torneoIds);
+
+    const requests = torneoIds.map(id =>
+      fetch(`${API_URL}/planteles/${id}`).then(r => r.json())
+    );
+
+    const results = await Promise.all(requests);
+
+    // Merge all planteles into one array
+    const allPlanteles = results.flat();
+
+    console.log('Planteles loaded:', allPlanteles.length);
+
+    await AsyncStorage.setItem(
+      'planteles_cache',
+      JSON.stringify(allPlanteles)
+    );
+
+    console.log('Planteles cached ✅');
+  } catch (err) {
+    console.log('Error preloading planteles ❌', err);
+  }
+};
+
+const preloadData = async () => {
+  try {
+    const [partidos, asistencias] = await Promise.all([
+      fetch(`${API_URL}/asistencias`).then(r => r.json()),
+      fetch(`${API_URL}/partidos`).then(r => r.json()),
+    ]);
+
+
+    await AsyncStorage.multiSet([
+      ['partidos', JSON.stringify(partidos)],
+      ['asistencias', JSON.stringify(asistencias)],
+    ]);
+
+
+    console.log('Preload completed and cached ✅');
+
+  } catch (err) {
+    console.log('Preload error:', err);
+  }
+};
+
   const login = async () => {
 
    
@@ -62,11 +117,21 @@ const [isOnline, setIsOnline] = useState(true);
 
       if (response.ok) {
         await AsyncStorage.setItem('accessToken', data.accessToken);
+      
+             await AsyncStorage.setItem(
+               'offlineUser',
+                   JSON.stringify({ username })
+                        );
+      
+          // 🔹 preload all critical data
+          await preloadData();
+const role = data.role; // backend should return role
+await preloadPlanteles(role);
+console.log(role)
+      
+      
         setMessage('Login successful!');
-        await AsyncStorage.setItem(
-  'offlineUser',
-  JSON.stringify({ username })
-);
+   
         navigation.navigate('TrabajoDiario');
       } else {
         setMessage(data.message || 'Login failed.');
@@ -90,7 +155,7 @@ const [isOnline, setIsOnline] = useState(true);
   </Text>
 )}
 
-      <Text style={styles.title}>Login-4.8</Text>
+      <Text style={styles.title}>Login-4.9</Text>
 
       <Text>Usuario:</Text>
       <TextInput
