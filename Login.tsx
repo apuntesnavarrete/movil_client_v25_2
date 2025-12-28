@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-
+import NetInfo from '@react-native-community/netinfo';
+import { useEffect } from 'react';
 import { API_URL } from './src/config/config';
 import { RootStackParamList } from './src/navigation/types';
 
@@ -13,8 +14,22 @@ export default function Login({ navigation }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+const [isOnline, setIsOnline] = useState(true);
+
+
+ useEffect(() => {
+  const unsubscribe = NetInfo.addEventListener(state => {
+    setIsOnline(!!state.isConnected);
+  });
+
+  return () => unsubscribe();
+}, []);
 
   const login = async () => {
+
+   
+
+
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
@@ -41,7 +56,18 @@ export default function Login({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login-4.5</Text>
+
+{isOnline ? (
+  <Text style={{ color: 'green', textAlign: 'center', marginBottom: 10 }}>
+    You are online.
+  </Text>
+) : (
+  <Text style={{ color: 'red', textAlign: 'center', marginBottom: 10 }}>
+    You are offline. Login will be limited.
+  </Text>
+)}
+
+      <Text style={styles.title}>Login-4.8</Text>
 
       <Text>Usuario:</Text>
       <TextInput
