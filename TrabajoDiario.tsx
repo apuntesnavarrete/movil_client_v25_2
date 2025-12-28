@@ -7,6 +7,9 @@ import { API_URL } from './src/config/config';
 import PartidoItem from './PartidoItem';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from './src/navigation/types';
+import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 interface Partido {
   torneoId: number;
@@ -41,6 +44,7 @@ export default function TrabajoDiario({ navigation }: Props) {
   const [usuario, setUsuario] = useState('invitado');
   const [trabajos, setTrabajos] = useState<Partido[]>([]);
   const [loading, setLoading] = useState(false);
+const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     const user = auth.getUser();
@@ -49,54 +53,84 @@ export default function TrabajoDiario({ navigation }: Props) {
     console.log(user)
   }, []);
 
-  useEffect(() => {
-    cargarTrabajos();
-  }, [diaSeleccionado, usuario]);
+useEffect(() => {
+  cargarTrabajos();
+}, [diaSeleccionado, usuario, isOnline]);
 
-  function cargarTrabajos() {
-            console.log(urlPartidos)
+useEffect(() => {
+  const unsubscribe = NetInfo.addEventListener(state => {
+    setIsOnline(!!state.isConnected);
+  });
 
-    setLoading(true);
-   fetchWithToken(urlPartidos)
-  .then(res => res.json())
-      .then((data: Partido[]) => {
-        let partidosFiltrados = data;
-                console.log(usuario)
+  return () => unsubscribe();
+}, []);
 
-        if (usuario === 'pro') {
-          partidosFiltrados = partidosFiltrados.filter(p => [47, 39].includes(p.torneoId));
-    
+useEffect(() => {
+  if (isOnline) {
+    syncPendingUpdates();
+  }
+}, [isOnline]);
 
+async function syncPendingUpdates() {
+  const queueRaw = await AsyncStorage.getItem('pending_updates');
+  if (!queueRaw) return;
 
-        } else if (usuario === 'ed') {
-          partidosFiltrados = partidosFiltrados.filter(p => [42].includes(p.torneoId));
-    
-              console.log("revisar filtardo ed")
-                console.log(partidosFiltrados)
-    
-        }
+  const queue = JSON.parse(queueRaw);
 
-        partidosFiltrados = partidosFiltrados.filter(p => p.dia === diaSeleccionado);
-
-        const trabajosPreparados = partidosFiltrados.map(p => ({
-          ...p,
-          g1: p.g1 ?? null,
-          g2: p.g2 ?? null,
-          desempate: p.desempate ?? '',
-          editando: false,
-        }));
-
-        setTrabajos(trabajosPreparados);
-        setLoading(false);
-      })
-      .catch(() => {
-        Alert.alert('Error', 'Failed to load partidos');
-        setTrabajos([]);
-        setLoading(false);
-      });
+  for (const partido of queue) {
+    await fetchWithToken(`${urlPartidos}/${partido.id}`, {
+      method: "PUT",
+      body: JSON.stringify(partido),
+    });
   }
 
-  function guardarGoles(partido: Partido) {
+  await AsyncStorage.removeItem('pending_updates');
+}
+
+async function cargarTrabajos() {
+  setLoading(true);
+
+  if (!isOnline) {
+    const cached = await AsyncStorage.getItem('partidos_cache');
+    setTrabajos(cached ? JSON.parse(cached) : []);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const res = await fetchWithToken(urlPartidos);
+    const data: Partido[] = await res.json();
+
+    let partidosFiltrados = data;
+
+    if (usuario === 'pro') {
+      partidosFiltrados = partidosFiltrados.filter(p => [47, 39].includes(p.torneoId));
+    } else if (usuario === 'ed') {
+      partidosFiltrados = partidosFiltrados.filter(p => [42].includes(p.torneoId));
+    }
+
+    partidosFiltrados = partidosFiltrados.filter(p => p.dia === diaSeleccionado);
+
+    const preparados = partidosFiltrados.map(p => ({
+      ...p,
+      g1: p.g1 ?? null,
+      g2: p.g2 ?? null,
+      desempate: p.desempate ?? '',
+      editando: false,
+    }));
+
+    setTrabajos(preparados);
+    await AsyncStorage.setItem('partidos_cache', JSON.stringify(preparados));
+  } catch (e) {
+    Alert.alert('Error', 'Failed to load partidos');
+    setTrabajos([]);
+  } finally {
+    setLoading(false);
+  }
+}
+
+
+ async function guardarGoles(partido: Partido) {
     if (partido.g1 === partido.g2 && !partido.desempate) {
       Alert.alert('Error', 'There is a draw, select who wins desempate (L or V).');
       return;
@@ -105,6 +139,16 @@ export default function TrabajoDiario({ navigation }: Props) {
       t.id === partido.id ? { ...partido, editando: false } : t
     );
     setTrabajos(updated);
+
+  await AsyncStorage.setItem('partidos_cache', JSON.stringify(updated));
+
+ if (!isOnline) {
+    const queueRaw = await AsyncStorage.getItem('pending_updates');
+    const queue = queueRaw ? JSON.parse(queueRaw) : [];
+    queue.push(partido);
+    await AsyncStorage.setItem('pending_updates', JSON.stringify(queue));
+    return;
+  }
 
     const payload = {
       id: partido.id,
@@ -143,16 +187,6 @@ export default function TrabajoDiario({ navigation }: Props) {
       partidoId: partido.id,  // match id
       torneoId: partido.torneoId
 });
-  /*
-  router.push({
-    pathname: "/Planteles",
-    params: { 
-      team: equipos,          // send both teams
-      partidoId: partido.id,  // match id
-      torneoId: partido.torneoId
-    }
-  });
-*/
 
     }
 
@@ -164,44 +198,41 @@ navigation.navigate('Goles', {
       partidoId: partido.id,  // match id
       torneoId: partido.torneoId
 });
-/*
-       router.push({
-    pathname: "/Goles",
-    params: { 
-            team: equipos,          // send both teams
-
-      partidoId: partido.id,  // match id
-      torneoId: partido.torneoId
-    }
-  });
-*/
 
     }
 
      
   }
 
-  function guardarEnServidor() {
-    const payload = trabajos.map(p => ({
-      id: p.id,
-      equipo1: p.equipo1,
-      equipo2: p.equipo2,
-      g1: p.g1 != null ? Number(p.g1) : null,
-      g2: p.g2 != null ? Number(p.g2) : null,
-      desempate: p.desempate ?? '',
-      liga: p.liga,
-      categoria: p.categoria,
-      dia: p.dia,
-      torneoId: p.torneoId,
-    }));
+ function guardarEnServidor() {
+  if (!isOnline) {
+    Alert.alert(
+      'Offline',
+      'Data saved locally. It will sync when connection returns.'
+    );
+    return;
+  }
+
+  const payload = trabajos.map(p => ({
+    id: p.id,
+    equipo1: p.equipo1,
+    equipo2: p.equipo2,
+    g1: p.g1 != null ? Number(p.g1) : null,
+    g2: p.g2 != null ? Number(p.g2) : null,
+    desempate: p.desempate ?? '',
+    liga: p.liga,
+    categoria: p.categoria,
+    dia: p.dia,
+    torneoId: p.torneoId,
+  }));
 
   fetchWithToken(urlPartidos, {
-  method: "POST",
-  body: JSON.stringify(payload),
-})
-      .then(() => Alert.alert('Success', 'Data saved on server ✅'))
-      .catch(err => console.error('Error saving data:', err));
-  }
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+    .then(() => Alert.alert('Success', 'Data saved on server ✅'))
+    .catch(() => Alert.alert('Error', 'Failed to save'));
+}
 
   function logout() {
     auth.logout();
