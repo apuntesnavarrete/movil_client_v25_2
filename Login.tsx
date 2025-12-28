@@ -28,6 +28,25 @@ const [isOnline, setIsOnline] = useState(true);
   const login = async () => {
 
    
+    if (!isOnline) {
+  const storedUser = await AsyncStorage.getItem('offlineUser');
+
+  if (!storedUser) {
+    setMessage('Offline login not available. Connect to internet first.');
+    return;
+  }
+
+  const parsedUser = JSON.parse(storedUser);
+
+  if (parsedUser.username === username) {
+    setMessage('Offline login successful');
+    navigation.navigate('TrabajoDiario');
+  } else {
+    setMessage('Offline login failed');
+  }
+
+  return;
+}
 
 
     try {
@@ -44,6 +63,10 @@ const [isOnline, setIsOnline] = useState(true);
       if (response.ok) {
         await AsyncStorage.setItem('accessToken', data.accessToken);
         setMessage('Login successful!');
+        await AsyncStorage.setItem(
+  'offlineUser',
+  JSON.stringify({ username })
+);
         navigation.navigate('TrabajoDiario');
       } else {
         setMessage(data.message || 'Login failed.');
