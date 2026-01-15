@@ -5,6 +5,8 @@ import { fetchWithToken } from "./src/utils/fetchWithToken";
 import { API_URL } from "./src/config/config";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "./src/navigation/types";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNetworkStatus } from './src/utils/useNetworkStatus';
 
 interface PlantelType {
   id: number;
@@ -24,6 +26,7 @@ type GolesRouteProp = RouteProp<RootStackParamList, 'Planteles'>;
 
 export default function Planteles({ route }: { route: GolesRouteProp }) {
       const { team, partidoId, torneoId } = route.params;
+const isOnline = useNetworkStatus();
 
   // Teams array
   let teamsArray: string[] = [];

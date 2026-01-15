@@ -9,6 +9,14 @@ import { RootStackParamList } from './src/navigation/types';
 import TrabajoDiario from './TrabajoDiario';
 import Goles from './Goles';
 import Planteles from './Planteles';
+import { useNetworkStatus } from './src/utils/useNetworkStatus';
+import { syncPendingUpdates } from './src/utils/partidosService';
+import { useEffect } from 'react';
+import { syncPendingUpdatesAsistencias } from './src/utils/asistenciaService';
+
+  
+
+
 enableScreens();
 
 
@@ -16,6 +24,15 @@ enableScreens();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
+
+    const isOnline = useNetworkStatus();
+useEffect(() => {
+    if (isOnline) {
+      console.log('APP → online detected, syncing asistencias');
+      syncPendingUpdatesAsistencias();
+    }
+  }, [isOnline]);
+
   return (
   <NavigationContainer>
     <Stack.Navigator

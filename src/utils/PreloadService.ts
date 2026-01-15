@@ -25,15 +25,4 @@ export async function preloadCoreData() {
     ['partidos', JSON.stringify(partidos)],
     ['asistencias', JSON.stringify(asistencias)],
   ]);
-/*
-console.log(
-  'PARTIDOS STORED:',
-  await AsyncStorage.getItem('partidos')
-);
-
-console.log(
-  'ASISTENCIAS STORED:',
-  await AsyncStorage.getItem('asistencias')
-);
-*/
 }

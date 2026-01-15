@@ -30,14 +30,12 @@ export async function syncPendingUpdates() {
 export async function fetchPartidos(isOnline: boolean) {
   if (!isOnline) {
     const cached = await AsyncStorage.getItem('partidos');
-        console.log("acched")
 
     console.log(cached)
     return cached ? JSON.parse(cached) : [];
   }
     const cached = await AsyncStorage.getItem('partidos');
-    console.log("acched")
-    console.log(cached)
+  
 
   const res = await fetchWithToken(urlPartidos);
   const data = await res.json();
