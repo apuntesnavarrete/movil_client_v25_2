@@ -330,6 +330,12 @@ await loadAsistencias();
     return;
   }
 */
+  if (!isOnline) {
+    setMessage("Goals saved to cache. Will sync when online.");
+    Alert.alert("Offline", "Goals saved to cache. Will sync when online.");
+    return;
+  }
+
 
     try {
       const payload = filtered.map((j) => ({

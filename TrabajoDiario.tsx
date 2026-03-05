@@ -11,6 +11,8 @@ import { filterPartidos } from './src/utils/partidosFilter';
 import { NetworkStatusMessage } from './src/components/NetworkStatusMessage';
 import { API_URL } from './src/config/config';
 import { fetchWithToken } from './src/utils/fetchWithToken';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { jwtDecode } from 'jwt-decode';
 
 
 interface Partido {
@@ -36,12 +38,34 @@ export default function TrabajoDiario({ navigation }: Props) {
  const isOnline = useNetworkStatus();
 
   const [diaSeleccionado, setDiaSeleccionado] = useState(diasDisponibles[new Date().getDay()]);
-  const [usuario] = useState('pro'); // replace with real auth
+const [usuario, setUsuario] = useState<any>(null);
 const [trabajos, setTrabajos] = useState<Partido[]>([]);
   const [loading, setLoading] = useState(false);
   const baseUrl = API_URL; // Replace with your API URL
 
 const urlPartidos = baseUrl + '/partidos';
+
+useEffect(() => {
+  async function loadUser() {
+    const token = await AsyncStorage.getItem('accessToken');
+    const storedUser = await AsyncStorage.getItem('usuario');
+
+
+        if (!token || !storedUser) return;
+
+            const decoded: any = jwtDecode(token);
+
+
+ setUsuario({
+      id: decoded.id,
+      role: decoded.role,
+      tournamentIds: decoded.tournamentIds ?? [],
+      username: JSON.parse(storedUser).username,
+    });
+  }
+   
+  loadUser();
+}, []);
 
   useEffect(() => {
        cargarTrabajos();
@@ -62,8 +86,20 @@ if (isOnline) {
   await cachePartidos(data);
 } 
 
-      const preparados = filterPartidos(data, usuario, diaSeleccionado);
-      setTrabajos(preparados);
+
+
+if (!usuario?.tournamentIds) return;
+console.log(data)
+console.log(diaSeleccionado)
+
+      const preparados = filterPartidos(
+  data,
+  usuario.tournamentIds,
+  diaSeleccionado
+);
+console.log(preparados)
+
+setTrabajos(preparados);
    } catch {
       Alert.alert('Error', 'Failed to load partidos');
     } finally {

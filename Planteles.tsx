@@ -7,6 +7,7 @@ import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "./src/navigation/types";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetworkStatus } from './src/utils/useNetworkStatus';
+import { NetworkStatusMessage } from "./src/components/NetworkStatusMessage";
 
 interface PlantelType {
   id: number;
@@ -27,6 +28,8 @@ type GolesRouteProp = RouteProp<RootStackParamList, 'Planteles'>;
 export default function Planteles({ route }: { route: GolesRouteProp }) {
       const { team, partidoId, torneoId } = route.params;
 const isOnline = useNetworkStatus();
+const PENDING_PLANTELES_KEY = 'pending_planteles';
+  const ASISTENCIAS_KEY = 'asistencias';
 
   // Teams array
   let teamsArray: string[] = [];
@@ -46,23 +49,51 @@ const [nuevoJugadorDorsal, setNuevoJugadorDorsal] = useState("");
   const url = `${API_URL}/planteles/${torneoId}`;
 
   // Load players
-  useEffect(() => {
-    if (!torneoId) return;
+useEffect(() => {
+  if (!torneoId) return;
 
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        setPlanteles(data);
+  const loadPlanteles = async () => {
+    // 1️⃣ read cache first
+    const saved = await AsyncStorage.getItem('planteles_cache');
+    if (saved) {
+      const cached = JSON.parse(saved);
+      setPlanteles(cached);
 
-        const firstTeam = teamsArray[0];
-        if (firstTeam) {
-          setFiltered(
-            data.filter((p: PlantelType) => p.teams.name === firstTeam)
-          );
-        }
-      })
-      .catch(console.log);
-  }, [torneoId]);
+      const firstTeam = teamsArray[0];
+      if (firstTeam) {
+        setFiltered(
+          cached.filter((p: PlantelType) => p.teams.name === firstTeam)
+        );
+      }
+    }
+
+    // 2️⃣ then fetch fresh data
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      setPlanteles(data);
+
+      const firstTeam = teamsArray[0];
+      if (firstTeam) {
+        setFiltered(
+          data.filter((p: PlantelType) => p.teams.name === firstTeam)
+        );
+      }
+
+      // 3️⃣ update cache
+      await AsyncStorage.setItem(
+        'planteles_cache',
+        JSON.stringify(data)
+      );
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  loadPlanteles();
+}, [torneoId]);
+
 
   // Change team
   const changeTeam = (teamName: string) => {
@@ -78,10 +109,11 @@ const [nuevoJugadorDorsal, setNuevoJugadorDorsal] = useState("");
   const getTotal = () => filtered.length;
 
   // SEND attendance
-  const enviarAsistencia = () => {
-    if (!selectedTeam) return;
+ const enviarAsistencia = async () => {
+  if (!selectedTeam) return;
+    console.log("boton enviar asistencias")
 
-    const asistenciaArray = filtered
+  const asistenciaArray = filtered
       .filter((jug) => jug.asistencia)
       .map((jug) => ({
         teamId: jug.teams.id, // ✅ now exists
@@ -93,19 +125,71 @@ const [nuevoJugadorDorsal, setNuevoJugadorDorsal] = useState("");
         partidoId: Number(partidoId),
         torneoId: Number(torneoId),
       }));
+    console.log("payload planteles")
+    console.log(asistenciaArray)
+
+ if (!isOnline) {
+  // 1️⃣ queue for later sync
+  const pending =
+    JSON.parse((await AsyncStorage.getItem(PENDING_PLANTELES_KEY)) ?? '[]');
+
+  await AsyncStorage.setItem(
+    PENDING_PLANTELES_KEY,
+    JSON.stringify([...pending, ...asistenciaArray])
+  );
+
+  // 2️⃣ update local snapshot (THIS is what Goles reads)
+  const cached =
+    JSON.parse((await AsyncStorage.getItem(ASISTENCIAS_KEY)) ?? '[]');
+
+let updated = [...cached];
 
 
-fetchWithToken(`${API_URL}/asistencias`, {
-  method: "POST",
-  body: JSON.stringify(asistenciaArray),
-})
- .then(() => {
-    alert(`Equipo: ${selectedTeam}\nJugadores Enviados: ${asistenciaArray.length}`);
-  })
-    .catch(err => console.error("Error saving asistencias:", err));
+for (const a of asistenciaArray) {
+  const index = updated.findIndex(
+    p =>
+      p.participantId === a.participantId &&
+      p.partidoId === a.partidoId &&
+      p.torneoId === a.torneoId
+  );
+
+  if (index >= 0) {
+    // update existing
+    updated[index] = { ...updated[index], ...a };
+  } else {
+    // append new
+    updated.push(a);
   }
+}
 
-const agregarNuevoJugador = () => {
+  
+  console.log("updated planteles")
+  console.log(updated)
+
+  
+
+  await AsyncStorage.setItem(ASISTENCIAS_KEY, JSON.stringify(updated));
+
+  alert('Saved locally (offline)');
+  return;
+}
+
+
+  // 🟢 ONLINE → send to backend
+  await fetchWithToken(`${API_URL}/asistencias`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(asistenciaArray),
+  });
+
+  alert('Saved online');
+};
+
+
+
+
+
+const agregarNuevoJugador = async () => {
   if (!selectedTeam || !nuevoJugadorNombre.trim() || !partidoId) return;
 
   // obtener teamId del plantel actual
@@ -140,27 +224,42 @@ const agregarNuevoJugador = () => {
     },
   ];
 
-  fetchWithToken(`${API_URL}/asistencias`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })
-    .then(() => {
-      alert(
-        `New player "${nuevoJugador.participants.name}" added to ${selectedTeam}`
-      );
+// ✅ OFFLINE: do NOT call backend
+  if (!isOnline) {
+    alert(
+      `Player "${nuevoJugador.participants.name}" saved to cache (offline)`
+    );
 
-      setNuevoJugadorNombre("");
-      setNuevoJugadorDorsal("");
-    })
-    .catch((err) => {
-      console.error("Error:", err);
-      alert("Error adding new player");
+    setNuevoJugadorNombre("");
+    setNuevoJugadorDorsal("");
+    return;
+  }
+
+
+  // 🟢 ONLINE: normal backend call
+  try {
+    await fetchWithToken(`${API_URL}/asistencias`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
+
+    alert(
+      `New player "${nuevoJugador.participants.name}" added to ${selectedTeam}`
+    );
+
+    setNuevoJugadorNombre("");
+    setNuevoJugadorDorsal("");
+  } catch (err) {
+    console.error(err);
+    alert("Error adding new player");
+  }
 };
 
 
  return (
     <SafeAreaView style={{ flex: 1, padding: 20 }}>
+          <NetworkStatusMessage></NetworkStatusMessage>
 
 
     {/* SELECT TEAM */}

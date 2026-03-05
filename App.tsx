@@ -10,9 +10,9 @@ import TrabajoDiario from './TrabajoDiario';
 import Goles from './Goles';
 import Planteles from './Planteles';
 import { useNetworkStatus } from './src/utils/useNetworkStatus';
-import { syncPendingUpdates } from './src/utils/partidosService';
 import { useEffect } from 'react';
 import { syncPendingUpdatesAsistencias } from './src/utils/asistenciaService';
+import { syncPendingPlanteles } from './src/utils/plantelesSync';
 
   
 
@@ -29,7 +29,11 @@ export default function App() {
 useEffect(() => {
     if (isOnline) {
       console.log('APP → online detected, syncing asistencias');
+setTimeout(() => {
+    syncPendingPlanteles();
+  }, 500);
       syncPendingUpdatesAsistencias();
+
     }
   }, [isOnline]);
 

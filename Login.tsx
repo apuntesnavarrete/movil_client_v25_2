@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { jwtDecode } from 'jwt-decode';
 
 import { RootStackParamList } from './src/navigation/types';
 import { onlineLogin, offlineLogin } from './src/utils/authService';
@@ -24,10 +25,17 @@ export default function Login({ navigation }: Props) {
       const data = await onlineLogin(username, password);
 
       await AsyncStorage.setItem('accessToken', data.accessToken);
-      await AsyncStorage.setItem(
-        'offlineUser',
-        JSON.stringify({ username })
-      );
+const decoded: any = jwtDecode(data.accessToken);
+
+await AsyncStorage.setItem(
+  'usuario',
+  JSON.stringify({
+    id: decoded.id,
+    username,
+    role: decoded.role,
+    tournamentIds: (decoded.tournamentIds ?? []).map(Number),
+  })
+);
       
       await syncPendingUpdates();
       await preloadCoreData();
