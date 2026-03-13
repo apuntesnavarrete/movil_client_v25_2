@@ -20,6 +20,9 @@ interface Partido {
   id: number;
   equipo1: string;
   equipo2: string;
+
+   equipo1Id: number;
+  equipo2Id: number;
   g1?: number | null;
   g2?: number | null;
   desempate: string;
@@ -168,7 +171,10 @@ function accion(tipo: 'R' | 'P' | 'G', partido: Partido) {
 
   if (tipo === 'P') {
     navigation.navigate('Planteles', {
-      team: equipos,
+      teams: [
+      { id: partido.equipo1Id, name: partido.equipo1 },
+      { id: partido.equipo2Id, name: partido.equipo2 }
+    ],
       partidoId: partido.id,
       torneoId: partido.torneoId,
     });

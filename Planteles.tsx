@@ -9,6 +9,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetworkStatus } from './src/utils/useNetworkStatus';
 import { NetworkStatusMessage } from "./src/components/NetworkStatusMessage";
 
+type Team = {
+  id: number;
+  name: string;
+};
+
 interface PlantelType {
   id: number;
   dorsal: string;
@@ -26,19 +31,19 @@ type GolesRouteProp = RouteProp<RootStackParamList, 'Planteles'>;
 
 
 export default function Planteles({ route }: { route: GolesRouteProp }) {
-      const { team, partidoId, torneoId } = route.params;
+      const { teams, partidoId, torneoId } = route.params;
+      const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
 const isOnline = useNetworkStatus();
 const PENDING_PLANTELES_KEY = 'pending_planteles';
   const ASISTENCIAS_KEY = 'asistencias';
 
   // Teams array
-  let teamsArray: string[] = [];
-  if (typeof team === "string") teamsArray = team.split(",");
-  else if (Array.isArray(team)) teamsArray = team;
+ 
 
-  const [selectedTeam, setSelectedTeam] = useState(
-    teamsArray.length > 0 ? teamsArray[0] : ""
-  );
+// teams comes from route.params
+const [selectedTeam, setSelectedTeam] = useState<Team | null>(
+  teams.length > 0 ? teams[0] : null
+);
 
   const [planteles, setPlanteles] = useState<PlantelType[]>([]);
   const [filtered, setFiltered] = useState<PlantelType[]>([]);
@@ -59,13 +64,14 @@ useEffect(() => {
       const cached = JSON.parse(saved);
       setPlanteles(cached);
 
-      const firstTeam = teamsArray[0];
-      if (firstTeam) {
-        setFiltered(
-          cached.filter((p: PlantelType) => p.teams.name === firstTeam)
-        );
-      }
-    }
+ const firstTeam = teams[0];
+
+if (firstTeam) {
+  setFiltered(
+    cached.filter((p: PlantelType) => p.teams.id === firstTeam.id)
+  );
+}
+}
 
     // 2️⃣ then fetch fresh data
     try {
@@ -74,12 +80,13 @@ useEffect(() => {
 
       setPlanteles(data);
 
-      const firstTeam = teamsArray[0];
-      if (firstTeam) {
-        setFiltered(
-          data.filter((p: PlantelType) => p.teams.name === firstTeam)
-        );
-      }
+   const firstTeam = teams[0];
+
+if (firstTeam) {
+  setFiltered(
+    data.filter((p: PlantelType) => p.teams.id === firstTeam.id)
+  );
+}
 
       // 3️⃣ update cache
       await AsyncStorage.setItem(
@@ -96,12 +103,15 @@ useEffect(() => {
 
 
   // Change team
-  const changeTeam = (teamName: string) => {
-    setSelectedTeam(teamName);
+const changeTeam = (team: Team) => {
+  setSelectedTeam(team);
 
-    const result = planteles.filter((p) => p.teams.name === teamName);
-    setFiltered(result);
-  };
+  const result = planteles.filter(
+    (p) => p.teams.id === team.id
+  );
+
+  setFiltered(result);
+};
 
   const getSelectedCount = () =>
     filtered.filter((j) => j.asistencia).length;
@@ -117,7 +127,7 @@ useEffect(() => {
       .filter((jug) => jug.asistencia)
       .map((jug) => ({
         teamId: jug.teams.id, // ✅ now exists
-        teamName: selectedTeam,
+        teamName: selectedTeam.name,
         participantId: jug.participants.id,
         name: jug.participants.name,
         dorsal: jug.dorsal,
@@ -126,7 +136,6 @@ useEffect(() => {
         torneoId: Number(torneoId),
       }));
     console.log("payload planteles")
-    console.log(asistenciaArray)
 
  if (!isOnline) {
   // 1️⃣ queue for later sync
@@ -193,28 +202,29 @@ const agregarNuevoJugador = async () => {
   if (!selectedTeam || !nuevoJugadorNombre.trim() || !partidoId) return;
 
   // obtener teamId del plantel actual
-  const equipoId =
-    filtered.length > 0 ? filtered[0].teams.id : 0;
+  const equipoId = selectedTeamId;
 
-  const nuevoJugador = {
+  const nuevoJugador: PlantelType = {
     id: Date.now(), // temporal
     participants: { id: Date.now(), name: nuevoJugadorNombre.trim() },
     dorsal: nuevoJugadorDorsal || "",
-    teams: { id: equipoId, name: selectedTeam },
-    teamId: equipoId,
+teams: {
+    id: selectedTeam.id,
+    name: selectedTeam.name
+  },  teamId: selectedTeam.id,
     asistencia: true,
   };
+  
 
   console.log("Nuevo jugador:", nuevoJugador);
 
   // agregar al estado
-  setFiltered([...filtered, nuevoJugador]);
-
+setFiltered(prev => [...prev, nuevoJugador]);
   // payload para backend
   const payload = [
     {
-      teamId: equipoId,
-      teamName: selectedTeam,
+     teamId: nuevoJugador.teamId,
+      teamName: nuevoJugador.teams.name,
       participantId: nuevoJugador.participants.id,
       name: nuevoJugador.participants.name,
       dorsal: nuevoJugador.dorsal,
@@ -223,9 +233,18 @@ const agregarNuevoJugador = async () => {
       torneoId: Number(torneoId),
     },
   ];
-
+console.log("payload to backend:", payload);
 // ✅ OFFLINE: do NOT call backend
   if (!isOnline) {
+
+      const pending =
+    JSON.parse((await AsyncStorage.getItem(PENDING_PLANTELES_KEY)) ?? '[]');
+
+  await AsyncStorage.setItem(
+    PENDING_PLANTELES_KEY,
+    JSON.stringify([...pending, ...payload])
+  );
+
     alert(
       `Player "${nuevoJugador.participants.name}" saved to cache (offline)`
     );
@@ -238,6 +257,7 @@ const agregarNuevoJugador = async () => {
 
   // 🟢 ONLINE: normal backend call
   try {
+    
     await fetchWithToken(`${API_URL}/asistencias`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -266,30 +286,30 @@ const agregarNuevoJugador = async () => {
     <Text style={{ fontSize: 20, fontWeight: "bold" }}>Choose team</Text>
 
     <View style={{ flexDirection: "row", marginVertical: 10, flexWrap: "wrap" }}>
-      {teamsArray.map((t) => (
+{teams.map((t) => (
         <TouchableOpacity
-          key={t}
+    key={t.id}
           onPress={() => changeTeam(t)}
           style={{
             paddingVertical: 6,
             paddingHorizontal: 12,
-            backgroundColor: t === selectedTeam ? "#ccc" : "#eee",
+      backgroundColor: selectedTeam?.id === t.id ? "#ccc" : "#eee",
             marginRight: 6,
             marginBottom: 6,
             borderRadius: 4,
           }}
         >
-          <Text>{t}</Text>
+    <Text>{t.name}</Text>
         </TouchableOpacity>
       ))}
     </View>
 
     {/* PLAYER LIST */}
-    {selectedTeam !== "" && (
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 10 }}>
-          {selectedTeam}
-        </Text>
+  {selectedTeam && (
+  <View style={{ flex: 1 }}>
+    <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 10 }}>
+      {selectedTeam.name}
+    </Text>
 
         <FlatList
           data={filtered}
